@@ -40,12 +40,12 @@ pipeline {
 
                 withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
                     sh """
-                        curl -X POST https://api.github.com/repos/jeevana1409/my-jsp/pulls \
+                        curl -X POST https://api.github.com/repos/sonyvinny77/my-jsp/pulls \
                         -H "Authorization: token \$GITHUB_TOKEN" \
                         -H "Accept: application/vnd.github.v3+json" \
                         -d '{
                             "title": "Auto PR: ${env.GIT_BRANCH} → dev",
-                            "head": "feature-branch-xyz",
+                            "head": "feature/login",
                             "base": "dev",
                             "body": "Automatically created after successful SonarQube Quality Gate."
                         }'
