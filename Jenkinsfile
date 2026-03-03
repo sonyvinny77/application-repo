@@ -56,7 +56,7 @@ pipeline {
 
                         sh """
                         echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
-                        docker build -t ${DOCKER_IMAGE}:${APP_VERSION} .
+                        docker build --no-cache -t ${DOCKER_IMAGE}:${APP_VERSION} .
                         docker push ${DOCKER_IMAGE}:${APP_VERSION}
                         docker logout
                         """
