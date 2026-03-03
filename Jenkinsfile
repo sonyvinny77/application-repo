@@ -36,7 +36,7 @@ pipeline {
 
             def newTag = "v${major}.${minor}.${patch}"
             echo "New Version: ${newTag}"
-
+            env.APP_VERSION = newTag
             sh "git tag ${newTag}"
 
             withCredentials([usernamePassword(
