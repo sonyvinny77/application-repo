@@ -17,21 +17,43 @@ pipeline {
             }
         }
 
-        stage('Initialization - Version Check') {
-            steps {
-                script {
-                    echo "Fetching tags..."
-                    sh "git fetch --tags"
+        stage('Initialization - Auto Version Increment') {
+    steps {
+        script {
 
-                    env.APP_VERSION = sh(
-                        script: "git describe --tags --abbrev=0",
-                        returnStdout: true
-                    ).trim()
+            sh "git fetch --tags"
 
-                    echo "Using version: ${APP_VERSION}"
-                }
-            }
+            // Get latest tag or default
+            def latestTag = sh(
+                script: "git describe --tags --abbrev=0 || echo v1.0.0",
+                returnStdout: true
+            ).trim()
+
+            echo "Latest Tag: ${latestTag}"
+
+            // Remove 'v'
+            def version = latestTag.replace("v", "")
+            def parts = version.tokenize(".")
+
+            def major = parts[0].toInteger()
+            def minor = parts[1].toInteger()
+            def patch = parts[2].toInteger()
+
+            // Increment patch
+            patch = patch + 1
+
+            env.APP_VERSION = "v${major}.${minor}.${patch}"
+
+            echo "New Version: ${APP_VERSION}"
+
+            // Create new tag
+            sh """
+               git tag ${APP_VERSION}
+               git push origin ${APP_VERSION}
+            """
         }
+    }
+}
 
         stage('Build') {
             steps {
