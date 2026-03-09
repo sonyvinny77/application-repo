@@ -7,9 +7,6 @@ pipeline {
 
     environment {
         DOCKER_IMAGE = "sony9014/myapp"
-        NEXUS_URL = "http://18.117.196.20:8081"
-        NEXUS_REPO = "my-maven-releases" // Your hosted Maven repo name
-        NEXUS_CRED_ID = "nexus-creds"
     }
 
     stages {
@@ -23,27 +20,36 @@ pipeline {
         stage('Initialization - Auto Version Increment') {
     steps {
         script {
-            sh 'git fetch --tags'
-            def latestTag = sh(script: "git describe --tags --abbrev=0", returnStdout: true).trim()
+            sh "git fetch --tags"
+
+            def latestTag = sh(
+                script: "git describe --tags --abbrev=0",
+                returnStdout: true
+            ).trim()
+
             echo "Latest Tag: ${latestTag}"
 
-            // Split version parts and increment patch
-            def (major, minor, patch) = latestTag.replaceAll('v','').split('\\.')
-            patch = (patch.toInteger() + 1).toString()
-            env.APP_VERSION = "v${major}.${minor}.${patch}"
-            echo "New Version: ${env.APP_VERSION}"
+            def versionNumber = latestTag.replace("v", "").tokenize(".")
+            def major = versionNumber[0]
+            def minor = versionNumber[1]
+            def patch = versionNumber[2].toInteger() + 1
 
-            // Only create tag if it doesn't exist
-            def tagExists = sh(script: "git tag -l ${env.APP_VERSION}", returnStdout: true).trim()
-            if (!tagExists) {
-                sh "git tag ${env.APP_VERSION}"
-                withCredentials([usernamePassword(credentialsId: 'github-api-creds', 
-                                                 usernameVariable: 'GIT_USER', 
-                                                 passwordVariable: 'GIT_PASSWORD')]) {
-                    sh "git push https://${GIT_USER}:${GIT_PASSWORD}@github.com/sonyvinny77/my-jsp.git ${env.APP_VERSION}"
-                }
-            } else {
-                echo "Tag ${env.APP_VERSION} already exists, skipping creation."
+            def newTag = "v${major}.${minor}.${patch}"
+            echo "New Version: ${newTag}"
+            env.APP_VERSION = newTag
+            sh "git tag ${newTag}"
+
+            withCredentials([usernamePassword(
+                credentialsId: 'github-api-creds',
+                usernameVariable: 'GIT_USERNAME',
+                passwordVariable: 'GIT_PASSWORD'
+            )]) {
+
+                sh """
+                git config user.name "${GIT_USERNAME}"
+                git config user.email "${GIT_USERNAME}@users.noreply.github.com"
+                git push https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/sonyvinny77/my-jsp.git ${newTag}
+                """
             }
         }
     }
@@ -61,21 +67,6 @@ pipeline {
             }
         }
 
-        stage('Upload WAR to Nexus') {
-    steps {
-        sh '''
-        mvn deploy:deploy-file \
-          -DgroupId=com.devops \
-          -DartifactId=myapp \
-          -Dversion=${APP_VERSION} \
-          -Dpackaging=war \
-          -Dfile=target/webapp.war \
-          -DrepositoryId=nexus-creds \
-          -Durl=http://18.117.196.20:8081/repository/my-maven-releases/
-        '''
-    }
-}
-
         stage('Docker Build & Push') {
             steps {
                 script {
@@ -84,6 +75,7 @@ pipeline {
                         usernameVariable: 'DOCKER_USER',
                         passwordVariable: 'DOCKER_PASS'
                     )]) {
+
                         sh """
                         echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
                         docker build --no-cache -t ${DOCKER_IMAGE}:${APP_VERSION} .
@@ -111,32 +103,14 @@ pipeline {
                 }
             }
         }
-
-        stage('Deploy to QA Server') {
-            steps {
-                input message: "Approve deployment to QA?"
-                script {
-                    sshagent(credentials: ['docker-server-ssh']) {
-                        sh """
-                        ssh -o StrictHostKeyChecking=no ec2-user@18.217.181.10 "
-                            docker pull ${DOCKER_IMAGE}:${APP_VERSION} &&
-                            docker stop app || true &&
-                            docker rm app || true &&
-                            docker run -d -p 8080:8080 --restart=always --name app-qa ${DOCKER_IMAGE}:${APP_VERSION}
-                        "
-                        """
-                    }
-                }
-            }
-        }
     }
 
     post {
         success {
-            echo "✅ DEV & QA Deployment Successful!"
+            echo "✅ DEV Deployment Successful!"
         }
         failure {
-            echo "❌ Deployment Failed!"
+            echo "❌ DEV Deployment Failed!"
         }
     }
 }
