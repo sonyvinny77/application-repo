@@ -71,29 +71,31 @@ pipeline {
         }
 
         stage('Upload WAR to Nexus') {
-            steps {
-                script {
-                    withCredentials([usernamePassword(
-                        credentialsId: "${NEXUS_CRED_ID}",
-                        usernameVariable: 'NEXUS_USER',
-                        passwordVariable: 'NEXUS_PASS'
-                    )]) {
-                        sh """
-                        mvn deploy:deploy-file \
-                            -DgroupId=com.devops \
-                            -DartifactId=myapp \
-                            -Dversion=${APP_VERSION} \
-                            -Dpackaging=war \
-                            -Dfile=target/myapp.war \
-                            -DrepositoryId=nexus \
-                            -Durl=${NEXUS_URL}/repository/${NEXUS_REPO}/ \
-                            -Dusername=${NEXUS_USER} \
-                            -Dpassword=${NEXUS_PASS}
-                        """
-                    }
+    steps {
+        withEnv(["APP_WAR_PATH=webapp/target/webapp.war"]) {
+            script {
+                withCredentials([usernamePassword(
+                    credentialsId: 'nexus-creds',
+                    usernameVariable: 'NEXUS_USER',
+                    passwordVariable: 'NEXUS_PASS'
+                )]) {
+                    sh """
+                    mvn deploy:deploy-file \
+                        -DgroupId=com.devops \
+                        -DartifactId=myapp \
+                        -Dversion=${APP_VERSION} \
+                        -Dpackaging=war \
+                        -Dfile=${APP_WAR_PATH} \
+                        -DrepositoryId=nexus \
+                        -Durl=http://18.117.196.20:8081/repository/my-maven-releases/ \
+                        -Dusername=${NEXUS_USER} \
+                        -Dpassword=${NEXUS_PASS}
+                    """
                 }
             }
         }
+    }
+}
 
         stage('Docker Build & Push') {
             steps {
