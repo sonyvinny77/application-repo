@@ -69,8 +69,8 @@ pipeline {
           -DartifactId=myapp \
           -Dversion=${APP_VERSION} \
           -Dpackaging=war \
-          -Dfile=webapp/target/webapp.war \
-          -DrepositoryId=nexus \
+          -Dfile=target/webapp.war \
+          -DrepositoryId=nexus-creds \
           -Durl=http://18.117.196.20:8081/repository/my-maven-releases/
         '''
     }
