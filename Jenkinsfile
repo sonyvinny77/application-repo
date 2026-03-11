@@ -36,25 +36,37 @@ pipeline {
 
             def newTag = "v${major}.${minor}.${patch}"
             echo "New Version: ${newTag}"
+
             env.APP_VERSION = newTag
-            sh "git tag ${newTag}"
 
-            withCredentials([usernamePassword(
-                credentialsId: 'github-api-creds',
-                usernameVariable: 'GIT_USERNAME',
-                passwordVariable: 'GIT_PASSWORD'
-            )]) {
+            // Check if tag already exists
+            def tagExists = sh(
+                script: "git tag -l ${newTag}",
+                returnStdout: true
+            ).trim()
 
-                sh """
-                git config user.name "${GIT_USERNAME}"
-                git config user.email "${GIT_USERNAME}@users.noreply.github.com"
-                git push https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/sonyvinny77/my-jsp.git ${newTag}
-                """
+            if(tagExists) {
+                echo "Tag already exists: ${newTag}"
+            } else {
+
+                sh "git tag ${newTag}"
+
+                withCredentials([usernamePassword(
+                    credentialsId: 'github-api-creds',
+                    usernameVariable: 'GIT_USERNAME',
+                    passwordVariable: 'GIT_PASSWORD'
+                )]) {
+
+                    sh """
+                    git config user.name "${GIT_USERNAME}"
+                    git config user.email "${GIT_USERNAME}@users.noreply.github.com"
+                    git push https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/sonyvinny77/my-jsp.git ${newTag}
+                    """
+                }
             }
         }
     }
 }
-
         stage('Build') {
             steps {
                 sh "mvn clean package"
