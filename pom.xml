@@ -238,5 +238,11 @@
   <prerequisites>
     <maven>3.6.0</maven>  <!-- Updated Maven version -->
   </prerequisites>
-
+  <distributionManagement>
+    <repository>
+        <id>nexus</id>
+        <name>Nexus</name>
+        <url>http://172.31.10.5:8081/repository/my-maven-releases/</url>
+    </repository>
+</distributionManagement>
 </project>
