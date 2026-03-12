@@ -18,45 +18,59 @@ pipeline {
         }
 
         stage('Initialization - Auto Version Increment') {
-            steps {
-                script {
+    steps {
+        script {
 
-                    sh 'git fetch --tags'
+            sh 'git fetch --tags'
 
-                    def latestTag = sh(
-                        script: "git describe --tags \$(git rev-list --tags --max-count=1) || echo v1.0.0",
-                        returnStdout: true
-                    ).trim()
+            // get latest tag (or return v1.0.0 if no tag found)
+            def latestTag = sh(
+                script: """
+                    git describe --tags \$(git rev-list --tags --max-count=1) 2>/dev/null || echo v1.0.0
+                """,
+                returnStdout: true
+            ).trim()
 
-                    echo "Latest Tag: ${latestTag}"
+            echo "Latest Tag Found: ${latestTag}"
 
-                    def version = latestTag.replace("v","").tokenize('.')
-                    def major = version[0]
-                    def minor = version[1]
-                    def patch = version[2].toInteger() + 1
+            // split version components
+            def version = latestTag.replace("v", "").tokenize(".")
+            def major = version[0]
+            def minor = version[1]
+            def patch = version[2].toInteger() + 1
 
-                    env.APP_VERSION = "v${major}.${minor}.${patch}"
+            // generate new tag
+            env.APP_VERSION = "v${major}.${minor}.${patch}"
 
-                    echo "New Version: ${env.APP_VERSION}"
+            echo "New Version to Assign: ${env.APP_VERSION}"
 
-                    withCredentials([usernamePassword(
-                        credentialsId: 'github-api-creds',
-                        usernameVariable: 'GIT_USERNAME',
-                        passwordVariable: 'GIT_PASSWORD'
-                    )]) {
+            // safely create new tag only if not exists
+            sh """
+                if git rev-parse ${APP_VERSION} >/dev/null 2>&1; then
+                    echo "Tag already exists. Auto-incrementing again..."
+                    exit 1
+                fi
+            """
 
-                        sh """
-                        git config user.name "jenkins"
-                        git config user.email "jenkins@local"
+            // push tag to GitHub
+            withCredentials([usernamePassword(
+                credentialsId: 'github-api-creds',
+                usernameVariable: 'GIT_USERNAME',
+                passwordVariable: 'GIT_PASSWORD'
+            )]) {
 
-                        git tag ${APP_VERSION}
+                sh """
+                git config user.name "jenkins"
+                git config user.email "jenkins@local"
 
-                        git push https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/sonyvinny77/my-jsp.git ${APP_VERSION}
-                        """
-                    }
-                }
+                git tag ${APP_VERSION}
+                git push https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/sonyvinny77/my-jsp.git ${APP_VERSION}
+                """
             }
+
         }
+    }
+}
 
         stage('Build WAR') {
             steps {
