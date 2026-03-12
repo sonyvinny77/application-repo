@@ -78,6 +78,11 @@ pipeline {
                 sh "mvn test"
             }
         }
+        stage('Upload WAR to Nexus') {
+    steps {
+        sh 'mvn clean deploy'
+    }
+}
         stage('Trivy Security Scan') {
             steps {
                 sh '''
