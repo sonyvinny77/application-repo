@@ -17,88 +17,74 @@ pipeline {
             }
         }
 
-        stage('Initialization - Auto Version Increment') {
-    steps {
-        script {
+        stage('Auto Version Increment') {
+            steps {
+                script {
 
-            sh 'git fetch --tags'
+                    sh 'git fetch --tags'
 
-            // get latest tag (or return v1.0.0 if no tag found)
-            def latestTag = sh(
-                script: """
-                    git describe --tags \$(git rev-list --tags --max-count=1) 2>/dev/null || echo v1.0.0
-                """,
-                returnStdout: true
-            ).trim()
+                    def latestTag = sh(
+                        script: "git describe --tags \$(git rev-list --tags --max-count=1) 2>/dev/null || echo v1.0.0",
+                        returnStdout: true
+                    ).trim()
 
-            echo "Latest Tag Found: ${latestTag}"
+                    echo "Latest Tag: ${latestTag}"
 
-            // split version components
-            def version = latestTag.replace("v", "").tokenize(".")
-            def major = version[0]
-            def minor = version[1]
-            def patch = version[2].toInteger() + 1
+                    def version = latestTag.replace("v","").tokenize('.')
+                    def major = version[0]
+                    def minor = version[1]
+                    def patch = version[2].toInteger() + 1
 
-            // generate new tag
-            env.APP_VERSION = "v${major}.${minor}.${patch}"
+                    env.APP_VERSION = "v${major}.${minor}.${patch}"
 
-            echo "New Version to Assign: ${env.APP_VERSION}"
+                    echo "New Version: ${APP_VERSION}"
 
-            // safely create new tag only if not exists
-            sh """
-                if git rev-parse ${APP_VERSION} >/dev/null 2>&1; then
-                    echo "Tag already exists. Auto-incrementing again..."
-                    exit 1
-                fi
-            """
+                    withCredentials([usernamePassword(
+                        credentialsId: 'github-api-creds',
+                        usernameVariable: 'GIT_USERNAME',
+                        passwordVariable: 'GIT_PASSWORD'
+                    )]) {
 
-            // push tag to GitHub
-            withCredentials([usernamePassword(
-                credentialsId: 'github-api-creds',
-                usernameVariable: 'GIT_USERNAME',
-                passwordVariable: 'GIT_PASSWORD'
-            )]) {
+                        sh """
+                        git config user.name "jenkins"
+                        git config user.email "jenkins@local"
 
-                sh """
-                git config user.name "jenkins"
-                git config user.email "jenkins@local"
+                        git tag ${APP_VERSION}
 
-                git tag ${APP_VERSION}
-                git push https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/sonyvinny77/my-jsp.git ${APP_VERSION}
-                """
+                        git push https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/sonyvinny77/my-jsp.git ${APP_VERSION}
+                        """
+                    }
+                }
             }
-
         }
-    }
-}
+
+        stage('Update Maven Version') {
+            steps {
+                sh "mvn versions:set -DnewVersion=${APP_VERSION}"
+            }
+        }
 
         stage('Build WAR') {
             steps {
-                sh "mvn clean package"
-
-                sh """
-                cp webapp/target/webapp.war webapp/target/webapp-${APP_VERSION}.war
-                """
+                sh "mvn clean package -DskipTests"
             }
         }
 
-        stage('Test') {
+        stage('Run Tests') {
             steps {
                 sh "mvn test"
             }
         }
 
-        stage('Upload WAR to Nexus') {
+        stage('Upload Artifact to Nexus') {
             steps {
                 sh "mvn deploy -DskipTests"
             }
         }
 
-        stage('Trivy Security Scan') {
+        stage('Security Scan') {
             steps {
-                sh '''
-                trivy fs --severity HIGH,CRITICAL --exit-code 1 .
-                '''
+                sh "trivy fs --severity HIGH,CRITICAL --exit-code 1 ."
             }
         }
 
@@ -115,7 +101,7 @@ pipeline {
                         sh """
                         echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
 
-                        docker build --no-cache -t ${DOCKER_IMAGE}:${APP_VERSION} .
+                        docker build -t ${DOCKER_IMAGE}:${APP_VERSION} .
 
                         docker push ${DOCKER_IMAGE}:${APP_VERSION}
 
@@ -126,9 +112,10 @@ pipeline {
             }
         }
 
-        stage('Deploy to Dev Server') {
+        stage('Deploy to Dev') {
             steps {
                 script {
+
                     sshagent(credentials: ['docker-server-ssh']) {
 
                         sh """
@@ -136,7 +123,7 @@ pipeline {
                         docker pull ${DOCKER_IMAGE}:${APP_VERSION} &&
                         docker stop app || true &&
                         docker rm app || true &&
-                        docker run -d -p 8080:8080 --restart=always --name app ${DOCKER_IMAGE}:${APP_VERSION}
+                        docker run -d -p 8080:8080 --name app ${DOCKER_IMAGE}:${APP_VERSION}
                         "
                         """
                     }
@@ -144,10 +131,11 @@ pipeline {
             }
         }
 
-        stage('Deploy to QA Server') {
+        stage('Deploy to QA') {
+
             steps {
 
-                input "Deploy to QA environment?"
+                input message: "Deploy to QA?"
 
                 script {
 
@@ -169,10 +157,11 @@ pipeline {
 
     post {
         success {
-            echo "✅ DEV Deployment Successful!"
+            echo "✅ Pipeline Completed Successfully"
         }
+
         failure {
-            echo "❌ DEV Deployment Failed!"
+            echo "❌ Pipeline Failed"
         }
     }
 }
