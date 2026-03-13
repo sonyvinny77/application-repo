@@ -1,59 +1,142 @@
 pipeline {
-    agent any
+agent any
 
-    tools {
-        maven 'Maven'
+```
+tools {
+    maven 'Maven'
+}
+
+environment {
+    DOCKER_IMAGE = "sony9014/myapp"
+}
+
+stages {
+
+    stage('Checkout') {
+        steps {
+            checkout scm
+        }
     }
 
-    stages {
+    stage('Auto Version Increment') {
+        steps {
+            script {
 
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
-        }
+                sh 'git fetch --tags'
 
-        stage('Build & SonarQube Analysis') {
-            steps {
-                withSonarQubeEnv('SonarServer') {
-                    sh 'mvn clean verify sonar:sonar'
-                }
-            }
-        }
+                def latestTag = sh(
+                    script: "git describe --tags \$(git rev-list --tags --max-count=1) 2>/dev/null || echo v1.0.0",
+                    returnStdout: true
+                ).trim()
 
-        stage("Quality Gate") {
-            steps {
-                timeout(time: 5, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
-                }
-            }
-        }
+                echo "Latest Tag: ${latestTag}"
 
-        stage('Create Pull Request to Dev') {
-            when {
-                not {
-                    branch 'dev'
-                }
-            }
-            steps {
-                sh 'echo Branch is: $BRANCH_NAME'   
+                def version = latestTag.replace("v","").tokenize('.')
+                def major = version[0]
+                def minor = version[1]
+                def patch = version[2].toInteger() + 1
 
-                withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
+                env.APP_VERSION = "v${major}.${minor}.${patch}"
+
+                echo "New Version: ${APP_VERSION}"
+
+                withCredentials([usernamePassword(
+                    credentialsId: 'github-api-creds',
+                    usernameVariable: 'GIT_USERNAME',
+                    passwordVariable: 'GIT_PASSWORD'
+                )]) {
+
                     sh """
-                        curl -X POST https://api.github.com/repos/jeevana1409/my-jsp/pulls \
-                        -H "Authorization: token \$GITHUB_TOKEN" \
-                        -H "Accept: application/vnd.github.v3+json" \
-                        -d '{
-                            "title": "Auto PR: ${env.GIT_BRANCH} → dev",
-                            "head": "feature-branch-xyz",
-                            "base": "dev",
-                            "body": "Automatically created after successful SonarQube Quality Gate."
-                        }'
+                    git config user.name "jenkins"
+                    git config user.email "jenkins@local"
+
+                    git tag ${APP_VERSION}
+
+                    git push https://\$GIT_USERNAME:\$GIT_PASSWORD@github.com/sonyvinny77/my-jsp.git ${APP_VERSION}
                     """
                 }
             }
         }
-
     }
+
+    stage('Update Maven Version') {
+        steps {
+            sh "mvn versions:set -DnewVersion=${APP_VERSION}"
+        }
+    }
+
+    stage('Build WAR') {
+        steps {
+            sh "mvn clean package -DskipTests"
+        }
+    }
+
+    stage('Run Tests') {
+        steps {
+            sh "mvn test"
+        }
+    }
+
+    stage('Upload Artifact to Nexus') {
+        steps {
+            sh "mvn deploy -DskipTests"
+        }
+    }
+
+    stage('Docker Build & Push') {
+        steps {
+            script {
+
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-creds',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+
+                    sh """
+                    echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
+
+                    docker build -t ${DOCKER_IMAGE}:${APP_VERSION} .
+
+                    docker push ${DOCKER_IMAGE}:${APP_VERSION}
+
+                    docker logout
+                    """
+                }
+            }
+        }
+    }
+
+    stage('Deploy to Production') {
+        steps {
+            script {
+
+                sshagent(credentials: ['docker-server-ssh']) {
+
+                    sh """
+                    ssh -o StrictHostKeyChecking=no ec2-user@3.16.188.115 "
+                    docker pull ${DOCKER_IMAGE}:${APP_VERSION} &&
+                    docker stop app || true &&
+                    docker rm app || true &&
+                    docker run -d -p 8080:8080 --name app-prod ${DOCKER_IMAGE}:${APP_VERSION}
+                    "
+                    """
+                }
+            }
+        }
+    }
+}
+
+post {
+    success {
+        echo "Production Deployment Successful"
+    }
+
+    failure {
+        echo "Production Pipeline Failed"
+    }
+}
+```
+
 }
 
