@@ -119,34 +119,11 @@ pipeline {
                     sshagent(credentials: ['docker-server-ssh']) {
 
                         sh """
-                        ssh -o StrictHostKeyChecking=no ec2-user@18.191.31.74 "
+                        ssh -o StrictHostKeyChecking=no ec2-user@3.129.39.24 "
                         docker pull ${DOCKER_IMAGE}:${APP_VERSION} &&
                         docker stop app || true &&
                         docker rm app || true &&
                         docker run -d -p 8080:8080 --name app ${DOCKER_IMAGE}:${APP_VERSION}
-                        "
-                        """
-                    }
-                }
-            }
-        }
-
-        stage('Deploy to QA') {
-
-            steps {
-
-                input message: "Deploy to QA?"
-
-                script {
-
-                    sshagent(credentials: ['docker-server-ssh']) {
-
-                        sh """
-                        ssh -o StrictHostKeyChecking=no ec2-user@3.140.199.196 "
-                        docker pull ${DOCKER_IMAGE}:${APP_VERSION} &&
-                        docker stop qa-app || true &&
-                        docker rm qa-app || true &&
-                        docker run -d -p 8080:8080 --name qa-app ${DOCKER_IMAGE}:${APP_VERSION}
                         "
                         """
                     }
