@@ -23,20 +23,19 @@ pipeline {
             sh '''
             git config --global --add safe.directory '*'
 
-            # Delete local tags to avoid conflicts
-            git tag -l | xargs -r git tag -d
-
             # Fetch latest tags from remote
             git fetch --tags
             '''
 
+            // Get latest tag properly (sorted)
             def latestTag = sh(
-                script: "git describe --tags \$(git rev-list --tags --max-count=1) 2>/dev/null || echo v1.0.0",
+                script: "git tag --sort=-v:refname | head -n 1 || echo v1.0.0",
                 returnStdout: true
             ).trim()
 
             echo "Latest Tag: ${latestTag}"
 
+            // Extract version
             def version = latestTag.replace("v","").tokenize('.')
             def major = version[0]
             def minor = version[1]
@@ -44,7 +43,7 @@ pipeline {
 
             env.APP_VERSION = "v${major}.${minor}.${patch}"
 
-            echo "New Version: ${APP_VERSION}"
+            echo "New Version: ${env.APP_VERSION}"
 
             withCredentials([usernamePassword(
                 credentialsId: 'github-api-creds',
@@ -52,14 +51,25 @@ pipeline {
                 passwordVariable: 'GIT_PASSWORD'
             )]) {
 
-                sh """
+                sh '''
                 git config user.name "jenkins"
                 git config user.email "jenkins@local"
+                '''
 
-                git tag ${APP_VERSION}
+                // ✅ Check if tag already exists
+                def tagExists = sh(
+                    script: "git tag -l ${env.APP_VERSION}",
+                    returnStdout: true
+                ).trim()
 
-                git push https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/sonyvinny77/my-jsp.git ${APP_VERSION}
-                """
+                if (tagExists) {
+                    echo "⚠️ Tag already exists. Skipping tag creation..."
+                } else {
+                    sh """
+                    git tag ${APP_VERSION}
+                    git push https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/sonyvinny77/my-jsp.git ${APP_VERSION}
+                    """
+                }
             }
         }
     }
