@@ -1,15 +1,20 @@
 pipeline {
     agent any
 
-    tools {
-        maven 'Maven'
-    }
-
     environment {
-        DOCKER_IMAGE = "sony9014/myapp"
+        APP_NAME = "myapp"
+        DOCKER_REPO = "sony9014/myapp"
+        VERSION = "v1.0.30"
+        PROD_SERVER = "ec2-user@172.31.5.86"
     }
 
     stages {
+
+        stage('Manual Approval') {
+            steps {
+                input message: "Approve deployment to PRODUCTION?"
+            }
+        }
 
         stage('Checkout') {
             steps {
@@ -17,122 +22,45 @@ pipeline {
             }
         }
 
-        stage('Auto Version Increment') {
+        stage('Validate Version') {
             steps {
-                script {
-
-                    sh 'git fetch --tags'
-
-                    def latestTag = sh(
-                        script: "git describe --tags \$(git rev-list --tags --max-count=1) 2>/dev/null || echo v1.0.0",
-                        returnStdout: true
-                    ).trim()
-
-                    echo "Latest Tag: ${latestTag}"
-
-                    def version = latestTag.replace("v","").tokenize('.')
-                    def major = version[0]
-                    def minor = version[1]
-                    def patch = version[2].toInteger() + 1
-
-                    env.APP_VERSION = "v${major}.${minor}.${patch}"
-
-                    echo "New Version: ${APP_VERSION}"
-
-                    withCredentials([usernamePassword(
-                        credentialsId: 'github-api-creds',
-                        usernameVariable: 'GIT_USERNAME',
-                        passwordVariable: 'GIT_PASSWORD'
-                    )]) {
-
-                        sh """
-                        git config user.name "jenkins"
-                        git config user.email "jenkins@local"
-
-                        git tag ${APP_VERSION}
-
-                        git push https://\$GIT_USERNAME:\$GIT_PASSWORD@github.com/sonyvinny77/my-jsp.git ${APP_VERSION}
-                        """
-                    }
-                }
+                echo "Deploying Version: ${VERSION}"
             }
         }
 
-        stage('Update Maven Version') {
+        stage('Pull Docker Image') {
             steps {
-                sh "mvn versions:set -DnewVersion=${APP_VERSION}"
-            }
-        }
-
-        stage('Build WAR') {
-            steps {
-                sh "mvn clean package -DskipTests"
-            }
-        }
-
-        stage('Run Tests') {
-            steps {
-                sh "mvn test"
-            }
-        }
-
-        stage('Upload Artifact to Nexus') {
-            steps {
-                sh "mvn deploy -DskipTests"
-            }
-        }
-
-        stage('Docker Build & Push') {
-            steps {
-                script {
-
-                    withCredentials([usernamePassword(
-                        credentialsId: 'dockerhub-creds',
-                        usernameVariable: 'DOCKER_USER',
-                        passwordVariable: 'DOCKER_PASS'
-                    )]) {
-
-                        sh """
-                        echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
-
-                        docker build -t ${DOCKER_IMAGE}:${APP_VERSION} .
-
-                        docker push ${DOCKER_IMAGE}:${APP_VERSION}
-
-                        docker logout
-                        """
-                    }
-                }
+                sh "docker pull ${DOCKER_REPO}:${VERSION}"
             }
         }
 
         stage('Deploy to Production') {
             steps {
-                script {
-
-                    sshagent(credentials: ['docker-server-ssh']) {
-
-                        sh """
-                        ssh -o StrictHostKeyChecking=no ec2-user@3.16.188.115 "
-                        docker pull ${DOCKER_IMAGE}:${APP_VERSION} &&
-                        docker stop app || true &&
-                        docker rm app || true &&
-                        docker run -d -p 8080:8080 --name app-prod ${DOCKER_IMAGE}:${APP_VERSION}
-                        "
-                        """
-                    }
+                sshagent(['docker-server-ssh']) {
+                    sh """
+                    ssh -o StrictHostKeyChecking=no ${PROD_SERVER} '
+                    docker stop ${APP_NAME} || true
+                    docker rm ${APP_NAME} || true
+                    docker run -d --name ${APP_NAME} -p 8080:8080 ${DOCKER_REPO}:${VERSION}
+                    '
+                    """
                 }
+            }
+        }
+
+        stage('Success') {
+            steps {
+                echo "Production Deployment Completed 🚀"
             }
         }
     }
 
     post {
         success {
-            echo "Production Deployment Successful"
+            echo "PROD Deployment Successful ✅"
         }
-
         failure {
-            echo "Production Pipeline Failed"
+            echo "PROD Deployment Failed ❌"
         }
     }
 }
