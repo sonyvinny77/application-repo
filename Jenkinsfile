@@ -92,12 +92,6 @@ pipeline {
             }
         }
 
-        stage('Upload Artifact to Nexus') {
-            steps {
-                sh "mvn deploy -DskipTests"
-            }
-        }
-
         stage('Security Scan') {
             steps {
                 sh "trivy fs --severity HIGH,CRITICAL --exit-code 1 ."
@@ -135,7 +129,7 @@ pipeline {
                     sshagent(credentials: ['docker-server-ssh']) {
 
                         sh """
-                        ssh -o StrictHostKeyChecking=no ec2-user@172.31.12.153 "
+                        ssh -o StrictHostKeyChecking=no ec2-user@172.31.9.86 "
                         docker pull ${DOCKER_IMAGE}:${APP_VERSION} &&
                         docker stop app || true &&
                         docker rm app || true &&
