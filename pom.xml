@@ -24,9 +24,7 @@
     <module>webapp</module>
   </modules>
 
-  <!-- FIXED distributionManagement (ONLY ONE BLOCK) -->
   <distributionManagement>
-
     <repository>
       <id>nexus</id>
       <name>Nexus Releases</name>
@@ -38,7 +36,6 @@
       <name>Test Project Site</name>
       <url>file:///tmp/maven-project-site</url>
     </site>
-
   </distributionManagement>
 
   <build>
@@ -74,6 +71,19 @@
       <plugin>
         <artifactId>maven-site-plugin</artifactId>
         <version>3.9.1</version>
+      </plugin>
+
+      <!-- STEP 2: Nexus Staging Plugin for deployment -->
+      <plugin>
+        <groupId>org.sonatype.plugins</groupId>
+        <artifactId>nexus-staging-maven-plugin</artifactId>
+        <version>1.6.8</version>
+        <extensions>true</extensions>
+        <configuration>
+          <serverId>nexus</serverId>
+          <nexusUrl>http://18.188.163.150:8081/</nexusUrl>
+          <autoReleaseAfterClose>true</autoReleaseAfterClose>
+        </configuration>
       </plugin>
 
     </plugins>
@@ -160,7 +170,6 @@
   </build>
 
   <dependencyManagement>
-
     <dependencies>
 
       <dependency>
@@ -204,7 +213,6 @@
       </dependency>
 
     </dependencies>
-
   </dependencyManagement>
 
   <scm>
