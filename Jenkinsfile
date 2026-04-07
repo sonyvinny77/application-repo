@@ -6,7 +6,7 @@ pipeline {
     }
 
     environment {
-        DOCKER_IMAGE = "sony9014/myapp"
+        DOCKER_IMAGE = "sony9014/mydeploy"
     }
 
     stages {
@@ -67,7 +67,7 @@ pipeline {
                 } else {
                     sh """
                     git tag ${APP_VERSION}
-                    git push https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/sonyvinny77/my-jsp.git ${APP_VERSION}
+                    git push https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/sonyvinny77/application-repo.git ${APP_VERSION}
                     """
                 }
             }
@@ -116,25 +116,6 @@ pipeline {
                         docker push ${DOCKER_IMAGE}:${APP_VERSION}
 
                         docker logout
-                        """
-                    }
-                }
-            }
-        }
-
-        stage('Deploy to Dev') {
-            steps {
-                script {
-
-                    sshagent(credentials: ['docker-server-ssh']) {
-
-                        sh """
-                        ssh -o StrictHostKeyChecking=no ec2-user@172.31.9.86 "
-                        docker pull ${DOCKER_IMAGE}:${APP_VERSION} &&
-                        docker stop app || true &&
-                        docker rm app || true &&
-                        docker run -d -p 8080:8080 --name app ${DOCKER_IMAGE}:${APP_VERSION}
-                        "
                         """
                     }
                 }
