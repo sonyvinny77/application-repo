@@ -99,28 +99,12 @@ pipeline {
             }
         }
         stage('Upload Artifact to Nexus') {
-            steps {
-                script {
-                    withCredentials([usernamePassword(
-                        credentialsId: 'nexus-creds',
-                        usernameVariable: 'NEXUS_USER',
-                        passwordVariable: 'NEXUS_PASS'
-                    )]) {
-
-                        configFileProvider([configFile(fileId: 'maven-settings', variable: 'MAVEN_SETTINGS')]) {
-
-                            sh """
-                            mvn deploy \
-                            -DskipTests \
-                            -s $MAVEN_SETTINGS \
-                            -Dnexus.username=$NEXUS_USER \
-                            -Dnexus.password=$NEXUS_PASS
-                            """
-                        }
-                    }
-                }
-            }
+    steps {
+        configFileProvider([configFile(fileId: 'maven-settings', variable: 'MAVEN_SETTINGS')]) {
+            sh "mvn deploy -DskipTests -s $MAVEN_SETTINGS"
         }
+    }
+}
         stage('Security Scan') {
             steps {
                 sh "trivy fs --severity HIGH,CRITICAL --exit-code 1 ."
