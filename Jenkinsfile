@@ -77,14 +77,19 @@ pipeline {
     }
 }
         stage('Update Maven Version') {
-            steps {
-                sh "mvn versions:set -DnewVersion=${APP_VERSION}"
-            }
+    steps {
+        script {
+            // First update parent (if multi-module)
+            sh "mvn -N versions:set -DnewVersion=${APP_VERSION}"
+            // Then update modules
+            sh "mvn versions:set -DnewVersion=${APP_VERSION}"
         }
+    }
+}
 
         stage('Build WAR') {
             steps {
-                sh "mvn clean package -DskipTests"
+                sh "mvn clean install -DskipTests"
             }
         }
 
