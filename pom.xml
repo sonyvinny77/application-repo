@@ -29,13 +29,13 @@
     <!-- RELEASE -->
     <repository>
       <id>nexus</id>
-      <url>http://3.23.132.234:8081/repository/maven-releases/</url>
+      <url>http://172.31.42.87:8081/repository/maven-releases/</url>
     </repository>
 
     <!-- SNAPSHOT (DEV) -->
     <snapshotRepository>
       <id>nexus</id>
-      <url>http://3.23.132.234:8081/repository/maven-dev/</url>
+      <url>http://172.31.42.87:8081/repository/maven-dev/</url>
     </snapshotRepository>
 
   </distributionManagement>
