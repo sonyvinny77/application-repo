@@ -25,11 +25,18 @@
   </modules>
 
   <distributionManagement>
+
+    <snapshotRepository>
+        <id>nexus</id>
+        <url>http://3.23.132.234:8081/repository/maven-dev/</url>
+    </snapshotRepository>
+
     <repository>
-      <id>nexus</id>
-      <name>Nexus Releases</name>
-      <url>http://18.188.163.150:8081/repository/my-maven-releases/</url>
+        <id>nexus</id>
+        <url>http://3.23.132.234:8081/repository/maven-releases/</url>
     </repository>
+
+</distributionManagement>
 
     <site>
       <id>site-server</id>
@@ -81,7 +88,7 @@
         <extensions>true</extensions>
         <configuration>
           <serverId>nexus</serverId>
-          <nexusUrl>http://18.188.163.150:8081/</nexusUrl>
+          <nexusUrl>http://3.23.132.234:8081/</nexusUrl>
           <autoReleaseAfterClose>true</autoReleaseAfterClose>
         </configuration>
       </plugin>
