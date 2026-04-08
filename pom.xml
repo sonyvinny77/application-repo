@@ -7,7 +7,8 @@
   <groupId>com.example.maven-project</groupId>
   <artifactId>maven-project</artifactId>
   <packaging>pom</packaging>
-  <version>1.0.41-SNAPSHOT</version>
+  <!-- ✅ Always use SNAPSHOT for dev builds -->
+  <version>1.0.0-SNAPSHOT</version>
 
   <name>Maven Project</name>
   <description>Sample Maven project</description>
@@ -16,6 +17,8 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <maven.compiler.source>17</maven.compiler.source>
     <maven.compiler.target>17</maven.compiler.target>
+    <!-- Build number based versioning -->
+    <revision>${env.BUILD_NUMBER}</revision>
   </properties>
 
   <modules>
@@ -23,27 +26,19 @@
     <module>webapp</module>
   </modules>
 
-  <!-- ✅ Correct Nexus Deployment -->
+  <!-- ✅ Nexus Deployment (DEV only for now) -->
   <distributionManagement>
-
-    <!-- RELEASE -->
-    <repository>
-      <id>nexus</id>
-      <url>http://172.31.42.87:8081/repository/maven-releases/</url>
-    </repository>
-
     <!-- SNAPSHOT (DEV) -->
     <snapshotRepository>
       <id>nexus</id>
       <url>http://172.31.42.87:8081/repository/maven-dev/</url>
     </snapshotRepository>
-
   </distributionManagement>
 
   <build>
     <plugins>
 
-      <!-- Java 17 -->
+      <!-- Java Compiler -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
@@ -60,13 +55,13 @@
         </configuration>
       </plugin>
 
-      <!-- OPTIONAL (only if you use release flow later) -->
+      <!-- Maven Deploy Plugin to override version at runtime -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-release-plugin</artifactId>
-        <version>3.0.1</version>
+        <artifactId>maven-deploy-plugin</artifactId>
+        <version>2.7</version>
         <configuration>
-          <autoVersionSubmodules>true</autoVersionSubmodules>
+          <altDeploymentRepository>dev::default::http://172.31.42.87:8081/repository/maven-dev/</altDeploymentRepository>
         </configuration>
       </plugin>
 
