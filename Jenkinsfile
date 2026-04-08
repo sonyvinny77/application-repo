@@ -7,8 +7,7 @@ pipeline {
 
     environment {
         DOCKER_IMAGE = "sony9014/mydeploy"
-        NEXUS_URL = "http://3.23.132.234:8081" // Updated to match your POM
-        APP_REPO = "https://github.com/sonyvinny77/application-repo.git"
+        NEXUS_URL = "http://172.31.42.87:8081"
     }
 
     stages {
@@ -22,11 +21,13 @@ pipeline {
         stage('Auto Version Increment') {
             steps {
                 script {
+                    // Make git directory safe and fetch tags
                     sh '''
                     git config --global --add safe.directory '*'
                     git fetch --tags
                     '''
 
+                    // Get latest v1.x.x tag
                     def latestTag = sh(
                         script: "git tag | grep '^v1\\.' | sort -V | tail -n 1 || echo v1.0.0",
                         returnStdout: true
@@ -34,6 +35,7 @@ pipeline {
 
                     echo "Filtered Latest Tag: ${latestTag}"
 
+                    // Compute new version
                     if (latestTag == "" || latestTag == "v1.0.0") {
                         env.APP_VERSION = "v1.0.0"
                     } else {
@@ -46,6 +48,7 @@ pipeline {
 
                     echo "New Version: ${env.APP_VERSION}"
 
+                    // Push tag safely
                     withCredentials([usernamePassword(
                         credentialsId: 'github-cred',
                         usernameVariable: 'GIT_USERNAME',
@@ -63,7 +66,7 @@ pipeline {
                         if (!tagExists) {
                             sh """
                             git tag ${APP_VERSION}
-                            git push https://${GIT_USERNAME}:${GIT_PASSWORD}@${APP_REPO} ${APP_VERSION}
+                            git push https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/sonyvinny77/application-repo.git ${APP_VERSION}
                             """
                         } else {
                             echo "⚠️ Tag already exists. Skipping..."
@@ -79,12 +82,9 @@ pipeline {
             }
         }
 
-        stage('Build Multi-Module Project') {
+        stage('Build WAR') {
             steps {
-                // Build both server and webapp modules
-                configFileProvider([configFile(fileId: 'maven-settings', variable: 'MAVEN_SETTINGS')]) {
-                    sh "mvn clean install -s $MAVEN_SETTINGS -DskipTests"
-                }
+                sh "mvn clean install -DskipTests"
             }
         }
 
@@ -103,8 +103,9 @@ pipeline {
                 )]) {
                     configFileProvider([configFile(fileId: 'maven-settings', variable: 'MAVEN_SETTINGS')]) {
                         sh """
-                        mvn deploy -s $MAVEN_SETTINGS -DskipTests \
-                        -Dnexus.username=${NEXUS_USER} -Dnexus.password=${NEXUS_PASS}
+                        mvn deploy -DskipTests -s $MAVEN_SETTINGS \
+                        -Dnexus.username=${NEXUS_USER} \
+                        -Dnexus.password=${NEXUS_PASS}
                         """
                     }
                 }
