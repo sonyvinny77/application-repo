@@ -1,8 +1,8 @@
 pipeline {
     agent any
 
-    tools {
-        maven 'Maven'
+    parameters {
+        string(name: 'APP_VERSION', description: 'Version to promote to QA (e.g. v1.0.5)')
     }
 
     environment {
@@ -11,81 +11,21 @@ pipeline {
 
     stages {
 
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
-        }
-
-        stage('Set Release Version') {
+        stage('Validate Version') {
             steps {
                 script {
-
-                    sh 'git fetch --tags'
-
-                    def latestTag = sh(
-                        script: "git describe --tags \$(git rev-list --tags --max-count=1) 2>/dev/null || echo v1.0.0",
-                        returnStdout: true
-                    ).trim()
-
-                    echo "Latest Tag: ${latestTag}"
-
-                    def version = latestTag.replace("v","").tokenize('.')
-                    def major = version[0]
-                    def minor = version[1].toInteger() + 1
-                    def patch = 0
-
-                    env.APP_VERSION = "v${major}.${minor}.${patch}"
-
-                    echo "Release Version: ${APP_VERSION}"
-
-                    withCredentials([usernamePassword(
-                        credentialsId: 'github-api-creds',
-                        usernameVariable: 'GIT_USERNAME',
-                        passwordVariable: 'GIT_PASSWORD'
-                    )]) {
-
-                        sh """
-                        git config user.name "jenkins"
-                        git config user.email "jenkins@local"
-
-                        git tag ${APP_VERSION}
-
-                        git push https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/sonyvinny77/application-repo.git ${APP_VERSION}
-                        """
+                    if (!params.APP_VERSION) {
+                        error "APP_VERSION is required!"
                     }
+
+                    echo "Promoting Version: ${params.APP_VERSION}"
                 }
             }
         }
 
-        stage('Update Maven Version') {
-            steps {
-                sh "mvn versions:set -DnewVersion=${APP_VERSION}"
-            }
-        }
-
-        stage('Build & Test') {
-            steps {
-                sh "mvn clean install"
-            }
-        }
-
-        stage('Security Scan') {
-            steps {
-                sh "trivy fs --severity HIGH,CRITICAL --exit-code 1 ."
-            }
-        }
-
-        stage('Upload Artifact to Nexus') {
-            steps {
-                sh "mvn deploy -DskipTests"
-            }
-        }
-
-        stage('Docker Build & Push') {
+        stage('Verify Image Exists (Optional but Recommended)') {
             steps {
                 script {
-
                     withCredentials([usernamePassword(
                         credentialsId: 'dockerhub-creds',
                         usernameVariable: 'DOCKER_USER',
@@ -93,25 +33,21 @@ pipeline {
                     )]) {
 
                         sh """
-                        echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
-
-                        docker build -t ${DOCKER_IMAGE}:${APP_VERSION} .
-
-                        docker push ${DOCKER_IMAGE}:${APP_VERSION}
-
-                        docker logout
+                            echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
+                            docker pull ${DOCKER_IMAGE}:${params.APP_VERSION}
+                            docker logout
                         """
                     }
                 }
             }
         }
 
-        stage('Trigger QA Deployment') {
+        stage('Trigger Deployment Repo - QA') {
             steps {
                 script {
-                    build job: 'deployment-qa-pipeline',
+                    build job: 'deployment-repo/qa',
                     parameters: [
-                        string(name: 'APP_VERSION', value: "${APP_VERSION}")
+                        string(name: 'APP_VERSION', value: "${params.APP_VERSION}")
                     ]
                 }
             }
@@ -120,9 +56,8 @@ pipeline {
 
     post {
         success {
-            echo "✅ Release Pipeline Completed Successfully"
+            echo "✅ Release Pipeline Completed - QA Triggered"
         }
-
         failure {
             echo "❌ Release Pipeline Failed"
         }
