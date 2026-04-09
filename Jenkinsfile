@@ -118,7 +118,7 @@ pipeline {
         stage('Trigger Deployment Repo - Dev') {
             steps {
                 script {
-                    build job: 'deployment-repo',
+                    build job: 'deployment-repo/dev',
                     parameters: [
                         string(name: 'APP_VERSION', value: "${APP_VERSION}")
                     ]
