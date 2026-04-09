@@ -20,56 +20,34 @@ pipeline {
         stage('Auto Version Increment') {
     steps {
         script {
-
-            sh 'git fetch --tags'
+            sh "git fetch --tags"
 
             def latestTag = sh(
-                script: "git describe --tags \$(git rev-list --tags --max-count=1) 2>/dev/null || echo v1.0.0",
+                script: "git describe --tags \$(git rev-list --tags --max-count=1)",
                 returnStdout: true
             ).trim()
 
             echo "Latest Tag: ${latestTag}"
 
-            def version = latestTag.replace("v","").tokenize('.')
-            def major = version[0]
-            def minor = version[1]
-            def patch = version[2].toInteger()
+            def versionParts = latestTag.replace("v", "").tokenize(".")
+            def major = versionParts[0]
+            def minor = versionParts[1]
+            def patch = versionParts[2].toInteger() + 1
 
-            def newTag = ""
-            def tagExists = true
+            env.VERSION = "v${major}.${minor}.${patch}"   // ✅ FIX
 
-            while (tagExists) {
-                patch = patch + 1
-                newTag = "v${major}.${minor}.${patch}"
-
-                def status = sh(
-                    script: "git tag -l ${newTag}",
-                    returnStdout: true
-                ).trim()
-
-                if (status == "") {
-                    tagExists = false
-                }
-            }
-
-            env.APP_VERSION = newTag
-
-            echo "Final Version: ${APP_VERSION}"
+            echo "Final Version: ${env.VERSION}"
 
             withCredentials([usernamePassword(
                 credentialsId: 'github-cred',
                 usernameVariable: 'GIT_USERNAME',
                 passwordVariable: 'GIT_PASSWORD'
             )]) {
-
-                sh '''
-                git config user.name "jenkins"
-                git config user.email "jenkins@local"
-                '''
-
                 sh """
-                git tag ${APP_VERSION}
-                git push https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/sonyvinny77/application-repo.git ${APP_VERSION}
+                    git config user.name "jenkins"
+                    git config user.email "jenkins@local"
+                    git tag ${env.VERSION}
+                    git push https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/sonyvinny77/application-repo.git ${env.VERSION}
                 """
             }
         }
