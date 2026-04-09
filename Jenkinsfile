@@ -1,4 +1,4 @@
-pipeline {
+pipeline { 
     agent any
 
     tools {
@@ -52,9 +52,10 @@ pipeline {
                             git config user.name jenkins
                             git config user.email jenkins@local
 
-                            git tag ${APP_VERSION}
+                            # Prevent failure if tag already exists
+                            git tag ${APP_VERSION} || echo "Tag already exists"
 
-                            git push https://\$GIT_USERNAME:\$GIT_PASSWORD@github.com/sonyvinny77/application-repo.git ${APP_VERSION}
+                            git push https://\$GIT_USERNAME:\$GIT_PASSWORD@github.com/sonyvinny77/application-repo.git ${APP_VERSION} || echo "Tag already pushed"
                         """
                     }
                 }
