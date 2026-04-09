@@ -16,42 +16,31 @@ pipeline {
                 checkout scm
             }
         }
-
         stage('Auto Version Increment') {
     steps {
         script {
-            sh "git fetch --tags"
+    def version = sh(
+        script: "git describe --tags \$(git rev-list --tags --max-count=1)",
+        returnStdout: true
+    ).trim()
 
-            def latestTag = sh(
-                script: "git describe --tags \$(git rev-list --tags --max-count=1)",
-                returnStdout: true
-            ).trim()
+    echo "Latest Tag: ${version}"
 
-            echo "Latest Tag: ${latestTag}"
+    def newVersion = version.replace("v", "").tokenize('.')
+    def major = newVersion[0]
+    def minor = newVersion[1]
+    def patch = newVersion[2].toInteger() + 1
 
-            def versionParts = latestTag.replace("v", "").tokenize(".")
-            def major = versionParts[0]
-            def minor = versionParts[1]
-            def patch = versionParts[2].toInteger() + 1
+    env.APP_VERSION = "v${major}.${minor}.${patch}"
 
-            env.VERSION = "v${major}.${minor}.${patch}"   // ✅ FIX
+    echo "Final Version: ${env.APP_VERSION}"
 
-            echo "Final Version: ${env.VERSION}"
-
-            withCredentials([usernamePassword(
-                credentialsId: 'github-cred',
-                usernameVariable: 'GIT_USERNAME',
-                passwordVariable: 'GIT_PASSWORD'
-            )]) {
-                sh """
-                    git config user.name "jenkins"
-                    git config user.email "jenkins@local"
-                    git tag ${env.VERSION}
-                    git push https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/sonyvinny77/application-repo.git ${env.VERSION}
-                """
-            }
-        }
-    }
+    sh """
+        git config user.name jenkins
+        git config user.email jenkins@local
+        git tag ${env.APP_VERSION}
+        git push https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/sonyvinny77/application-repo.git ${env.APP_VERSION}
+    """
 }
 
         stage('Update Maven Version') {
