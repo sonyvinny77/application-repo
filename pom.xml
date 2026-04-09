@@ -22,18 +22,16 @@
     <maven.compiler.target>17</maven.compiler.target>
   </properties>
 
-  <!-- ✅ Nexus configuration -->
   <distributionManagement>
     <repository>
-      <id>maven-release</id>
-      <url>http://3.23.132.234:8081/repository/maven-releases/</url>
+        <id>maven-release</id>
+        <url>http://3.23.132.234:8081/repository/maven-releases/</url>
     </repository>
-
     <snapshotRepository>
-      <id>maven-dev</id>
-      <url>http://3.23.132.234:8081/repository/maven-dev/</url>
+        <id>maven-snapshot</id>
+        <url>http://3.23.132.234:8081/repository/maven-snapshots/</url>
     </snapshotRepository>
-  </distributionManagement>
+</distributionManagement>
 
   <build>
     <plugins>
