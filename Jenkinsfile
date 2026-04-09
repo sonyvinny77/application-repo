@@ -78,9 +78,7 @@ pipeline {
 
         stage('Update Maven Version') {
     steps {
-        script {
-            sh "mvn versions:set -DnewVersion=${VERSION}-SNAPSHOT"
-        }
+        sh "mvn versions:set -DnewVersion=${env.VERSION}"
     }
 }
 
