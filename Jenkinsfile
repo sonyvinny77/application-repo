@@ -77,10 +77,12 @@ pipeline {
 }
 
         stage('Update Maven Version') {
-            steps {
-                sh "mvn versions:set -DnewVersion=${APP_VERSION}"
-            }
+    steps {
+        script {
+            sh "mvn versions:set -DnewVersion=${VERSION}-SNAPSHOT"
         }
+    }
+}
 
         stage('Build WAR') {
             steps {
