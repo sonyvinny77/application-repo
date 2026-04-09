@@ -27,9 +27,13 @@
 
   <distributionManagement>
     <repository>
+        <id>maven-release</id>
+        <url>http://3.23.132.234:8081/repository/maven-releases/</url>
+    </repository>
+    <snapshotRepository>
         <id>maven-dev</id>
         <url>http://3.23.132.234:8081/repository/maven-dev/</url>
-    </repository>
+    </snapshotRepository>
 </distributionManagement>
 
   <build>
