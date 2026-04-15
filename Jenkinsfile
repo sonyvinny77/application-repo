@@ -1,6 +1,14 @@
 pipeline {
     agent any
 
+    tools {
+        maven 'maven'
+    }
+
+    parameters {
+        string(name: 'APP_VERSION', description: 'Version from dev (example: v1.0.1)')
+    }
+
     environment {
         DOCKER_IMAGE = "sony9014/mydeploy"
     }
@@ -13,7 +21,43 @@ pipeline {
             }
         }
 
-        stage('Get Latest Docker Version') {
+        stage('Use Version from Dev') {
+            steps {
+                script {
+                    if (!params.APP_VERSION) {
+                        error "APP_VERSION is required!"
+                    }
+                    env.APP_VERSION = params.APP_VERSION
+                    echo "Using Version: ${env.APP_VERSION}"
+                }
+            }
+        }
+
+        stage('Update Maven Version') {
+            steps {
+                sh "mvn versions:set -DnewVersion=${APP_VERSION}"
+            }
+        }
+
+        stage('Build WAR') {
+            steps {
+                sh "mvn clean package -DskipTests"
+            }
+        }
+
+        stage('Run Tests') {
+            steps {
+                sh "mvn test"
+            }
+        }
+
+        stage('Security Scan') {
+            steps {
+                sh "trivy fs --severity HIGH,CRITICAL --exit-code 1 ."
+            }
+        }
+
+        stage('Docker Build & Push') {
             steps {
                 script {
                     withCredentials([usernamePassword(
@@ -22,32 +66,26 @@ pipeline {
                         passwordVariable: 'DOCKER_PASS'
                     )]) {
 
-                        // Fetch ONLY version (no docker login noise)
-                        env.APP_VERSION = sh(
-                            script: """
-                                curl -s -u \$DOCKER_USER:\$DOCKER_PASS https://hub.docker.com/v2/repositories/${DOCKER_IMAGE}/tags?page_size=100 | \
-                                jq -r '.results[].name' | sort -V | tail -n1
-                            """,
-                            returnStdout: true
-                        ).trim()
-                    }
+                        sh """
+                            echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
 
-                    echo "Promoting Docker Version: ${env.APP_VERSION}"
+                            docker build -t ${DOCKER_IMAGE}:${APP_VERSION} .
 
-                    if (!env.APP_VERSION) {
-                        error "No Docker version found!"
+                            docker push ${DOCKER_IMAGE}:${APP_VERSION}
+
+                            docker logout
+                        """
                     }
                 }
             }
         }
 
-        stage('Trigger QA Deployment') {
+        stage('Trigger Deployment Repo - QA') {
             steps {
                 script {
                     build job: 'deployment-repo/qa',
-                    propagate: true,   // change to false if you don’t want failure to affect this pipeline
                     parameters: [
-                        string(name: 'APP_VERSION', value: "${env.APP_VERSION}")
+                        string(name: 'APP_VERSION', value: "${APP_VERSION}")
                     ]
                 }
             }
@@ -56,7 +94,7 @@ pipeline {
 
     post {
         success {
-            echo "✅ Release Pipeline Completed - QA Triggered"
+            echo "✅ Release Pipeline Completed → QA Deployment Triggered"
         }
         failure {
             echo "❌ Release Pipeline Failed"
