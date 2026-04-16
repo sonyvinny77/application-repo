@@ -92,7 +92,9 @@ pipeline {
         }
         stage('Manual Approval for PreProd') {
     steps {
-        input message: "Approve deployment to PreProd?", ok: "Deploy"
+        input message: "Approve deployment to PreProd?", 
+              ok: "Deploy",
+              submitter: "admin"   // add your username
     }
 }
         stage('Trigger Deployment Repo - PreProd') {
