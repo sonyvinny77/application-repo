@@ -1,6 +1,14 @@
 pipeline {
     agent any
 
+    tools {
+        maven 'maven'
+    }
+
+    parameters {
+        string(name: 'APP_VERSION', description: 'Hotfix version (example: v1.0.2)')
+    }
+
     environment {
         DOCKER_IMAGE = "sony9014/mydeploy"
     }
@@ -13,7 +21,43 @@ pipeline {
             }
         }
 
-        stage('Get Latest Docker Version') {
+        stage('Validate Version') {
+            steps {
+                script {
+                    if (!params.APP_VERSION) {
+                        error "APP_VERSION is required!"
+                    }
+                    env.APP_VERSION = params.APP_VERSION
+                    echo "Using Hotfix Version: ${env.APP_VERSION}"
+                }
+            }
+        }
+
+        stage('Update Maven Version') {
+            steps {
+                sh "mvn versions:set -DnewVersion=${APP_VERSION}"
+            }
+        }
+
+        stage('Build WAR') {
+            steps {
+                sh "mvn clean package -DskipTests"
+            }
+        }
+
+        stage('Run Tests') {
+            steps {
+                sh "mvn test"
+            }
+        }
+
+        stage('Security Scan') {
+            steps {
+                sh "trivy fs --severity HIGH,CRITICAL --exit-code 1 ."
+            }
+        }
+
+        stage('Docker Build & Push') {
             steps {
                 script {
                     withCredentials([usernamePassword(
@@ -22,31 +66,49 @@ pipeline {
                         passwordVariable: 'DOCKER_PASS'
                     )]) {
 
-                        env.APP_VERSION = sh(
-                            script: """
-                                curl -s -u \$DOCKER_USER:\$DOCKER_PASS https://hub.docker.com/v2/repositories/${DOCKER_IMAGE}/tags?page_size=100 | \
-                                jq -r '.results[].name' | sort -V | tail -n1
-                            """,
-                            returnStdout: true
-                        ).trim()
-                    }
+                        sh """
+                            echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
 
-                    echo "Hotfix Deploy Version: ${env.APP_VERSION}"
+                            docker build -t ${DOCKER_IMAGE}:${APP_VERSION} .
 
-                    if (!env.APP_VERSION) {
-                        error "No Docker version found!"
+                            docker push ${DOCKER_IMAGE}:${APP_VERSION}
+
+                            docker logout
+                        """
                     }
                 }
             }
         }
 
-        stage('Trigger PreProd Deployment') {
+        stage('Trigger Deployment Repo - PreProd') {
             steps {
                 script {
                     build job: 'deployment-repo/preprod',
-                    propagate: true,
                     parameters: [
-                        string(name: 'APP_VERSION', value: "${env.APP_VERSION}")
+                        string(name: 'APP_VERSION', value: "${APP_VERSION}")
+                    ]
+                }
+            }
+        }
+
+        stage('Manual Approval for Production') {
+            steps {
+                timeout(time: 10, unit: 'MINUTES') {
+                    input(
+                        message: 'Deploy Hotfix to Production?',
+                        ok: 'Deploy',
+                        submitter: 'sony'
+                    )
+                }
+            }
+        }
+
+        stage('Trigger Deployment Repo - Prod') {
+            steps {
+                script {
+                    build job: 'deployment-repo/prod',
+                    parameters: [
+                        string(name: 'APP_VERSION', value: "${APP_VERSION}")
                     ]
                 }
             }
@@ -55,10 +117,10 @@ pipeline {
 
     post {
         success {
-            echo "✅ Hotfix Pipeline Completed - PreProd Triggered"
+            echo "✅ Hotfix deployed to Production successfully!"
         }
         failure {
-            echo "❌ Hotfix Pipeline Failed"
+            echo "❌ Hotfix pipeline failed"
         }
     }
 }
