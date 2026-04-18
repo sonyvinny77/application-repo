@@ -37,33 +37,45 @@ pipeline {
         stage('Create Pull Request to Dev') {
             steps {
                 script {
+
+                    // 🔥 Get current branch dynamically
+                    def branchName = env.BRANCH_NAME
+                    echo "Current Branch: ${branchName}"
+
                     withCredentials([string(credentialsId: 'github-api-creds', variable: 'GITHUB_TOKEN')]) {
 
-                        def prExists = sh(
+                        // 🔍 Check if PR already exists
+                        def prCheck = sh(
                             script: """
                             curl -s -H "Authorization: token $GITHUB_TOKEN" \
-                            https://api.github.com/repos/sonyvinny77/application-repo/pulls?head=sonyvinny77:feature/login&base=dev \
-                            | jq length
+                            https://api.github.com/repos/sonyvinny77/application-repo/pulls?head=sonyvinny77:${branchName}&base=dev
                             """,
                             returnStdout: true
                         ).trim()
 
-                        if (prExists == "0") {
-                            echo "Creating new PR..."
-
-                            sh """
-                            curl --fail -X POST https://api.github.com/repos/sonyvinny77/application-repo/pulls \
-                            -H "Authorization: token $GITHUB_TOKEN" \
-                            -H "Accept: application/vnd.github+json" \
-                            -d '{
-                              "title": "Auto PR: feature/login → dev",
-                              "head": "feature/login",
-                              "base": "dev",
-                              "body": "Created automatically by Jenkins."
-                            }'
-                            """
+                        if (prCheck.contains('"number"')) {
+                            echo "✅ PR already exists. Skipping creation."
                         } else {
-                            echo "PR already exists. Skipping creation."
+                            echo "🚀 Creating Pull Request..."
+
+                            // 🆕 Create PR
+                            def response = sh(
+                                script: """
+                                curl -s -X POST https://api.github.com/repos/sonyvinny77/application-repo/pulls \
+                                -H "Authorization: token $GITHUB_TOKEN" \
+                                -H "Accept: application/vnd.github+json" \
+                                -d '{
+                                  "title": "Auto PR: ${branchName} → dev",
+                                  "head": "${branchName}",
+                                  "base": "dev",
+                                  "body": "Created automatically by Jenkins pipeline."
+                                }'
+                                """,
+                                returnStdout: true
+                            ).trim()
+
+                            echo "📌 GitHub API Response:"
+                            echo "${response}"
                         }
                     }
                 }
